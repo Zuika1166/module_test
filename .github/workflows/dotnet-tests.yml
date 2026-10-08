@@ -1,0 +1,61 @@
+name: .NET tests and branch coverage
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore BudgetCalculator.sln
+
+      - name: Build
+        run: dotnet build BudgetCalculator.sln --configuration Release --no-restore
+
+      - name: Run xUnit with Coverlet
+        run: dotnet test BudgetCalculator.sln --configuration Release --no-build --no-restore --settings coverage.runsettings --collect:"XPlat Code Coverage" --results-directory TestResults --logger "trx;LogFileName=tests.trx"
+
+      - name: Assert 100% coverage of controller branches
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+
+          reports = list(Path("TestResults").rglob("coverage.cobertura.xml"))
+          assert len(reports) == 1, f"Expected one coverage report, got {reports}"
+          root = ET.parse(reports[0]).getroot()
+          controllers = [
+              cls for cls in root.findall(".//class")
+              if cls.attrib.get("filename", "").replace("\\", "/").endswith("BudgetController.cs")
+          ]
+          assert len(controllers) == 1, f"BudgetController.cs coverage entry not found: {len(controllers)}"
+          controller = controllers[0]
+          branch_lines = [
+              line for line in controller.findall(".//line")
+              if line.attrib.get("branch", "").lower() == "true"
+          ]
+          assert branch_lines, "No covered branch instructions found in BudgetController"
+          branch_rate = float(controller.attrib["branch-rate"])
+          assert branch_rate == 1.0, f"Controller branch coverage is {branch_rate:.1%}, expected 100%"
+          print(f"BudgetController branch coverage: {branch_rate:.0%}")
+          PY
+
+      - name: Upload xUnit and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xunit-and-coverage
+          path: TestResults/
+          if-no-files-found: warn
