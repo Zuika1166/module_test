@@ -33,8 +33,9 @@ jobs:
           from pathlib import Path
           from xml.etree import ElementTree as ET
 
-          reports = list(Path("TestResults").rglob("coverage.cobertura.xml"))
-          assert len(reports) == 1, f"Expected one coverage report, got {reports}"
+          # VSTest may copy the same report into an extra In/ directory.
+          reports = sorted(Path("TestResults").rglob("coverage.cobertura.xml"))
+          assert reports, "Cobertura report was not generated"
           root = ET.parse(reports[0]).getroot()
           controllers = [
               cls for cls in root.findall(".//class")
