@@ -19,8 +19,8 @@ public sealed class BudgetController : ControllerBase
 
         if (request.IncludeInsurance)
         {
-            // Deliberate original defect for the red/green test demonstration.
-            total *= 5m;
+            // Insurance adds 5% to the base amount.
+            total *= 1.05m;
         }
 
         return Ok(new BudgetResponse(decimal.Round(total, 2, MidpointRounding.AwayFromZero)));
